@@ -26,12 +26,25 @@ def detect(url):
     im=Image.open(io.BytesIO(r.content)).convert("RGB")
     p,m=load(); inputs=p(images=im,text=PROMPT,return_tensors="pt")
     with torch.no_grad(): outputs=m(**inputs)
-    res=p.post_process_grounded_object_detection(outputs,inputs.input_ids,box_threshold=.22,text_threshold=.20,target_sizes=[im.size[::-1]])[0]
+    res=p.post_process_grounded_object_detection(outputs,inputs.input_ids,threshold=.22,text_threshold=.20,target_sizes=[im.size[::-1]])[0]
     boxes=[]
     for box,score,label in zip(res["boxes"],res["scores"],res["labels"]):
         x1,y1,x2,y2=[float(v) for v in box]
         boxes.append({"x":round(x1/im.width*100),"y":round(y1/im.height*100),"width":max(1,round((x2-x1)/im.width*100)),"height":max(1,round((y2-y1)/im.height*100)),"label":str(label),"confidence":round(float(score),3)})
-    return {"status":"EDIT REQUIRED" if boxes else "NEEDS HUMAN REVIEW","characterBoxes":boxes,"findings":[f"{b['label']} ({round(b['confidence']*100)}%)" for b in boxes],"method":"Local Grounding DINO open-vocabulary detection"}
+    # Merge heavily-overlapping detections so synonyms do not create a giant destructive mask.
+    boxes=sorted(boxes,key=lambda b:b["confidence"],reverse=True)
+    kept=[]
+    def overlap(a,b):
+        ax1,ay1,ax2,ay2=a["x"],a["y"],a["x"]+a["width"],a["y"]+a["height"]
+        bx1,by1,bx2,by2=b["x"],b["y"],b["x"]+b["width"],b["y"]+b["height"]
+        inter=max(0,min(ax2,bx2)-max(ax1,bx1))*max(0,min(ay2,by2)-max(ay1,by1))
+        small=max(1,min(a["width"]*a["height"],b["width"]*b["height"]))
+        return inter/small
+    for b in boxes:
+        if b["confidence"]<.25: continue
+        if any(overlap(b,k)>.70 for k in kept): continue
+        kept.append(b)
+    return {"status":"EDIT REQUIRED" if kept else "NEEDS HUMAN REVIEW","characterBoxes":kept,"findings":[f"{b['label']} ({round(b['confidence']*100)}%)" for b in kept],"method":"Local Grounding DINO open-vocabulary detection · overlap filtered"}
 
 def serve(hub, token, worker_id="artwork-worker"):
     headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"}
