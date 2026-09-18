@@ -6,7 +6,7 @@ const PROVIDERS={
 function slug(s){return s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")}
 function words(s){return s.toLowerCase().replace(/megaways|slot|game/g," ").replace(/[^a-z0-9]+/g," ").trim().split(/\s+/).filter(x=>x.length>2)}
 function clean(s){return s.replaceAll("&amp;","&").replaceAll("\\u0026","&").replaceAll("\\/","/")}
-async function get(url){const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html"},redirect:"follow"});return r.ok?{html:await r.text(),url:r.url}:{html:"",url:r.url}}
+async function get(url,ms=4500){const c=new AbortController(),t=setTimeout(()=>c.abort(),ms);try{const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html"},redirect:"follow",signal:c.signal});return r.ok?{html:await r.text(),url:r.url}:{html:"",url:r.url}}catch{return{html:"",url}}finally{clearTimeout(t)}}
 function pageTitle(html){for(const m of ["<h1",'<meta property="og:title" content="','<title>']){const p=html.toLowerCase().indexOf(m.toLowerCase());if(p<0)continue;const a=html.slice(p,p+600).replace(/<[^>]+>/g," ");return clean(a).replace(/\s+/g," ").trim()}return""}
 function matchScore(name,pageUrl,title){const need=words(name),hay=words(decodeURIComponent(pageUrl)+" "+title);if(!need.length)return 0;const hit=need.filter(w=>hay.some(h=>h===w||h.includes(w)||w.includes(h))).length;return hit/need.length}
 function imageMatch(name,url,context){const need=words(name),hay=words(decodeURIComponent(url)+" "+context);if(!need.length)return 0;return need.filter(w=>hay.some(h=>h===w||h.includes(w)||w.includes(h))).length/need.length}
@@ -31,7 +31,7 @@ export async function GET(request){
  async function inspect(url,source,base){
   try{const {html,url:finalUrl}=await get(url);if(!html)return;const title=pageTitle(html);const score=matchScore(name,finalUrl,title);if(score<0.75)return;for(const x of pageImages(html,name,source,base))if(!candidates.some(y=>y.url===x.url))candidates.push(x)}catch{}
  }
- if(cfg?.direct)await inspect(cfg.direct(name),"Official provider",99);
+ if(!candidates.length&&cfg?.direct)await inspect(cfg.direct(name),"Official provider",99);
  if(!candidates.length){
   const q=(cfg?.domain?"site:"+cfg.domain+" ":"")+'"'+name+'" "'+provider+'"';
   try{const {html}=await get("https://html.duckduckgo.com/html/?q="+encodeURIComponent(q));for(const link of ddgLinks(html).slice(0,10)){if(cfg?.domain&&!link.includes(cfg.domain))continue;await inspect(link,cfg?.domain?"Official provider":"Web result",cfg?.domain?97:84);if(candidates.length>=6)break}}catch{}
@@ -40,9 +40,9 @@ export async function GET(request){
   try{const {html}=await get("https://html.duckduckgo.com/html/?q="+encodeURIComponent('"'+name+'" "'+provider+'" slot'));for(const link of ddgLinks(html).slice(0,12)){await inspect(link,"Web fallback",82);if(candidates.length>=6)break}}catch{}
  }
  const verified=[];
- for(const c of candidates){
+ for(const c of candidates.slice(0,10)){
   try{
-   const r=await fetch(c.url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"image/*"},redirect:"follow"});
+   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3500);const r=await fetch(c.url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"image/*"},redirect:"follow",signal:controller.signal});clearTimeout(timer);
    if(!r.ok)continue;
    const b=new Uint8Array(await r.arrayBuffer());
    let w=0,h=0;
