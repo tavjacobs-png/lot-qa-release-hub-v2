@@ -19,3 +19,5 @@
 .addProviderDetails{margin-top:10px}.addProviderDetails summary{cursor:pointer;font-weight:700;color:#5361df}.addProviderFields{display:grid;grid-template-columns:1fr 1.5fr auto;gap:8px;margin-top:9px}.addProviderFields input{min-width:0}
 
 .danger{border:1px solid #efb6b6;background:#fff5f5;color:#b42318;border-radius:10px;padding:11px 14px;font-weight:700;cursor:pointer}.danger:hover{background:#feecec}.removeGameBtn{margin-top:10px}
+
+.testEnvironment{border:1px solid #e4e8ef;border-radius:12px;padding:12px;margin:8px 0 14px;display:flex;flex-direction:column;gap:8px}.envToggle{display:flex;gap:8px}.envActive{border-color:#5965e8!important;background:#eef0ff!important;color:#4552d9!important}.testEnvironment small{color:#7b879e}
