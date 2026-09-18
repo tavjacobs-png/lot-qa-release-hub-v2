@@ -37,5 +37,18 @@ export async function GET(request){
  if(!candidates.length){
   try{const {html}=await get("https://html.duckduckgo.com/html/?q="+encodeURIComponent('"'+name+'" "'+provider+'" slot'));for(const link of ddgLinks(html).slice(0,12)){await inspect(link,"Web fallback",82);if(candidates.length>=6)break}}catch{}
  }
- return Response.json({query:name+" - "+provider,candidates:candidates.slice(0,8)});
+ const verified=[];
+ for(const c of candidates){
+  try{
+   const r=await fetch(c.url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"image/*"},redirect:"follow"});
+   if(!r.ok)continue;
+   const b=new Uint8Array(await r.arrayBuffer());
+   let w=0,h=0;
+   if(b[0]===0x89&&b[1]===0x50&&b[2]===0x4e&&b[3]===0x47&&b.length>=24){w=(b[16]<<24)|(b[17]<<16)|(b[18]<<8)|b[19];h=(b[20]<<24)|(b[21]<<16)|(b[22]<<8)|b[23]}
+   else if(b[0]===0xff&&b[1]===0xd8){let i=2;while(i+9<b.length){if(b[i]!==0xff){i++;continue}const m=b[i+1],len=(b[i+2]<<8)|b[i+3];if([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(m)){h=(b[i+5]<<8)|b[i+6];w=(b[i+7]<<8)|b[i+8];break}i+=2+len}}
+   else if(b.length>30&&String.fromCharCode(...b.slice(0,4))==="RIFF"&&String.fromCharCode(...b.slice(8,12))==="WEBP"){const kind=String.fromCharCode(...b.slice(12,16));if(kind==="VP8X"){w=1+b[24]+(b[25]<<8)+(b[26]<<16);h=1+b[27]+(b[28]<<8)+(b[29]<<16)}}
+   if(w>0&&h>0&&w===h)verified.push({...c,width:w,height:h,aspect:"1:1"});
+  }catch{}
+ }
+ return Response.json({query:name+" - "+provider,candidates:verified.slice(0,8)});
 }
