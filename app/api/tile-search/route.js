@@ -50,7 +50,7 @@ export async function GET(request){
  }
  async function tavily(query,source){
   if(!aiKey)return;
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10000);
   try{
    diagnostics.searchPasses++;
    const r=await fetch("https://api.tavily.com/search",{method:"POST",headers:{"Content-Type":"application/json"},signal:controller.signal,body:JSON.stringify({api_key:aiKey,query,search_depth:"advanced",include_images:true,max_results:10})});
