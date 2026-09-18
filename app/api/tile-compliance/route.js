@@ -25,7 +25,13 @@ export async function POST(request){
    const bytes=Buffer.from(await ir.arrayBuffer());
    if(bytes.length>8*1024*1024) return Response.json({error:'Tile is too large for vision scan'},{status:413});
    const image='data:'+type+';base64,'+bytes.toString('base64');
-   const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',signal:controller.signal,headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':'https://lot-qa-release-hub-v2.vercel.app','X-Title':'Slot QA Release Hub'},body:JSON.stringify({model:'openrouter/free',messages:[{role:'user',content:[{type:'text',text:CHECKLIST+'\\nGame: '+(name||'Unknown')+'\\nProvider: '+(provider||'Unknown')},{type:'image_url',image_url:{url:image}}]}],temperature:0,max_tokens:500})});
+   const DETECT=`Inspect this casino game tile visually. Your FIRST and most important task is character detection.
+List every visible: (1) human/person, (2) animal including fish, (3) fictional/made-up character, mascot, monster, creature or anthropomorphic being.
+A tiny, partial, background, illustrated or logo-adjacent character still counts.
+Return one compact JSON object only:
+{"humans":true/false,"animals":true/false,"fictionalCharacters":true/false,"characterBoxes":[{"x":0,"y":0,"width":0,"height":0}],"observations":["..."]}
+Coordinates are integer percentages 0-100 of the whole image, with one tight box per visible character. If a fisherman and a fish are visible, both must have boxes. Do not decide compliance. Do not omit obvious illustrated characters.`;
+   const r=await fetch('https://openrouter.ai/api/v1/chat/completions',{method:'POST',signal:controller.signal,headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json','HTTP-Referer':'https://lot-qa-release-hub-v2.vercel.app','X-Title':'Slot QA Release Hub'},body:JSON.stringify({model:'openrouter/free',messages:[{role:'user',content:[{type:'text',text:DETECT+'\\nGame: '+(name||'Unknown')+'\\nProvider: '+(provider||'Unknown')},{type:'image_url',image_url:{url:image}}]}],temperature:0,max_tokens:350})});
    const data=await r.json();
    if(!r.ok) return Response.json({error:(data?.error?.message||('OpenRouter HTTP '+r.status))+(data?.error?.metadata?.provider_name?' · provider: '+data.error.metadata.provider_name:'')},{status:502});
    const raw=data?.choices?.[0]?.message?.content||'';
@@ -46,7 +52,7 @@ export async function POST(request){
     return {status,reason:s.slice(0,600)||'Vision response could not be fully structured.',findings:s?[s.slice(0,300)]:[],humans,animals,fictionalCharacters:fictional,characterBoxes:boxes};
    }
    const out=tolerant(raw);
-   const findings=Array.isArray(out.findings)?out.findings.map(String).slice(0,12):[];
+   const findings=(Array.isArray(out.observations)?out.observations:Array.isArray(out.findings)?out.findings:[]).map(String).slice(0,12);
    const combined=(String(out.reason||'')+' '+findings.join(' ')).toLowerCase();
    const detectedHuman=out.humans===true||/human|person|people|man\b|woman\b|boy\b|girl\b|fisherman|character/.test(combined);
    const detectedAnimal=out.animals===true||/animal|fish\b|bass\b|dog\b|cat\b|bird\b|horse\b|monkey|gorilla|bear\b|wolf\b|lion\b|tiger\b|shark\b/.test(combined);
@@ -55,8 +61,10 @@ export async function POST(request){
     const kinds=[detectedHuman?'human/person':null,detectedAnimal?'animal':null,detectedFictional?'fictional/made-up character':null].filter(Boolean);
     const characterBoxes=Array.isArray(out.characterBoxes)?out.characterBoxes.filter(b=>b&&[b.x,b.y,b.width,b.height].every(Number.isFinite)).map(b=>({x:Math.max(0,Math.min(100,Math.round(b.x))),y:Math.max(0,Math.min(100,Math.round(b.y))),width:Math.max(1,Math.min(100,Math.round(b.width))),height:Math.max(1,Math.min(100,Math.round(b.height)))})).slice(0,12):[]; return Response.json({status:'EDIT REQUIRED',reason:'Mandatory character rule: '+kinds.join(', ')+' detected. Remove all visible characters while preserving the game logo, background and other compliant artwork.',findings:[...findings,'Hard rule triggered: '+kinds.join(', ')].slice(0,12),characterBoxes,method:'OpenRouter vision detection + deterministic character-rule enforcement · human approval required'});
    }
-   if(!['PASS','EDIT REQUIRED','NEEDS HUMAN REVIEW'].includes(out.status)) return Response.json({status:'NEEDS HUMAN REVIEW',reason:'No mandatory character was confidently detected, but the vision model returned an uncertain compliance result.',findings,method:'OpenRouter vision · safe fallback · human approval required'});
-   return Response.json({status:out.status,reason:String(out.reason||''),findings,method:'OpenRouter free multimodal router · deterministic character rule checked · human approval required'});
+   if(out.humans===false&&out.animals===false&&out.fictionalCharacters===false){
+     return Response.json({status:'PASS',reason:'Character detection found no human, animal or fictional/made-up characters. Other pre-login checks require human approval.',findings,method:'OpenRouter character detection → deterministic hard rule · human approval required'});
+   }
+   return Response.json({status:'NEEDS HUMAN REVIEW',reason:'Character detector did not return a confident yes/no result.',findings,method:'OpenRouter character detection · safe fallback · human approval required'});
   }finally{clearTimeout(timer)}
  }catch(e){return Response.json({error:e?.name==='AbortError'?'Vision scan timed out':('Vision scan unavailable: '+(e?.message||'unknown error'))},{status:502})}
 }
