@@ -10,7 +10,7 @@ import torch
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 
 MODEL="IDEA-Research/grounding-dino-tiny"
-PROMPT="person. human. man. woman. fisherman. child. animal. fish. bird. dog. cat. horse. bear. monkey. gorilla. creature. monster. mascot. fictional character. anthropomorphic character."
+PROMPT="human person. fisherman. child. fish. animal. bird. dog. cat. horse. bear. monkey. gorilla. fantasy creature. monster. mascot. fictional character. anthropomorphic character."
 _processor=None; _model=None
 
 def load():
@@ -41,7 +41,7 @@ def detect(url):
         small=max(1,min(a["width"]*a["height"],b["width"]*b["height"]))
         return inter/small
     for b in boxes:
-        if b["confidence"]<.25: continue
+        if b["confidence"]<.25: continue\n        # Suppress implausible low-confidence labels that commonly fire on stylised casino art.\n        if b["label"].lower() in {"horse","gorilla","monkey","bear","dog","cat","bird"} and b["confidence"]<.40: continue
         if any(overlap(b,k)>.70 for k in kept): continue
         kept.append(b)
     return {"status":"EDIT REQUIRED" if kept else "NEEDS HUMAN REVIEW","characterBoxes":kept,"findings":[f"{b['label']} ({round(b['confidence']*100)}%)" for b in kept],"method":"Local Grounding DINO open-vocabulary detection · overlap filtered"}
