@@ -29,8 +29,23 @@ export async function POST(request){
    const data=await r.json();
    if(!r.ok) return Response.json({error:(data?.error?.message||('OpenRouter HTTP '+r.status))+(data?.error?.metadata?.provider_name?' · provider: '+data.error.metadata.provider_name:'')},{status:502});
    const raw=data?.choices?.[0]?.message?.content||'';
-   let out; try{out=JSON.parse(raw)}catch{const m=raw.match(/\{[\s\S]*\}/);out=m?JSON.parse(m[0]):null}
-   if(!out) return Response.json({error:'Vision model returned an invalid compliance result'},{status:502});
+   function tolerant(raw){
+    if(raw&&typeof raw==='object') return raw;
+    const s=String(raw||'').replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
+    try{return JSON.parse(s)}catch{}
+    const a=s.indexOf('{'),b=s.lastIndexOf('}'); if(a>=0&&b>a){try{return JSON.parse(s.slice(a,b+1))}catch{}}
+    const low=s.toLowerCase();
+    const yes=(words)=>words.some(w=>low.includes(w));
+    const humans=yes(['human','person','people','man ','woman','fisherman','boy ','girl ']);
+    const animals=yes(['animal','fish','bass','dog','cat','bird','horse','monkey','gorilla','bear','wolf','lion','tiger','shark']);
+    const fictional=yes(['fictional','made-up','made up','mascot','creature','monster','anthropomorphic','fantasy being']);
+    let status=low.includes('edit required')?'EDIT REQUIRED':low.includes('needs human review')?'NEEDS HUMAN REVIEW':low.includes('pass')?'PASS':(humans||animals||fictional?'EDIT REQUIRED':'NEEDS HUMAN REVIEW');
+    const boxes=[];
+    const re=/(?:x|left)\s*[:=]\s*(\d{1,3})[^\d]+(?:y|top)\s*[:=]\s*(\d{1,3})[^\d]+(?:width|w)\s*[:=]\s*(\d{1,3})[^\d]+(?:height|h)\s*[:=]\s*(\d{1,3})/gi; let m;
+    while((m=re.exec(s))&&boxes.length<12) boxes.push({x:+m[1],y:+m[2],width:+m[3],height:+m[4]});
+    return {status,reason:s.slice(0,600)||'Vision response could not be fully structured.',findings:s?[s.slice(0,300)]:[],humans,animals,fictionalCharacters:fictional,characterBoxes:boxes};
+   }
+   const out=tolerant(raw);
    const findings=Array.isArray(out.findings)?out.findings.map(String).slice(0,12):[];
    const combined=(String(out.reason||'')+' '+findings.join(' ')).toLowerCase();
    const detectedHuman=out.humans===true||/human|person|people|man\b|woman\b|boy\b|girl\b|fisherman|character/.test(combined);
