@@ -1,6 +1,6 @@
 const CHECKLIST = `
 You are reviewing a UK online-casino game lobby tile for PRE-LOGIN display.
-Return ONLY valid JSON with keys: status, reason, findings, humans, animals, fictionalCharacters. humans, animals, and fictionalCharacters must each be booleans describing whether any such visible character is present anywhere in the tile.
+Return ONLY valid JSON with keys: status, reason, findings, humans, animals, fictionalCharacters, characterBoxes. humans, animals, and fictionalCharacters must each be booleans. characterBoxes must be an array containing one box for EVERY visible human, animal, creature, mascot or fictional/made-up character. Each box is {x,y,width,height} using integer percentages 0-100 of the full image, tightly covering that character. Include the whole character, not just the face.
 status must be exactly PASS, EDIT REQUIRED, or NEEDS HUMAN REVIEW.
 PASS only when the artwork clearly matches the named game and is suitable for pre-login.
 EDIT REQUIRED when a specific removable visual element makes it unsuitable.
@@ -38,7 +38,7 @@ export async function POST(request){
    const detectedFictional=out.fictionalCharacters===true||/fictional|made-up|made up|mascot|creature|monster|fantasy being|anthropomorphic/.test(combined);
    if(detectedHuman||detectedAnimal||detectedFictional){
     const kinds=[detectedHuman?'human/person':null,detectedAnimal?'animal':null,detectedFictional?'fictional/made-up character':null].filter(Boolean);
-    return Response.json({status:'EDIT REQUIRED',reason:'Mandatory character rule: '+kinds.join(', ')+' detected. Remove all visible characters while preserving the game logo, background and other compliant artwork.',findings:[...findings,'Hard rule triggered: '+kinds.join(', ')].slice(0,12),method:'OpenRouter vision detection + deterministic character-rule enforcement · human approval required'});
+    const characterBoxes=Array.isArray(out.characterBoxes)?out.characterBoxes.filter(b=>b&&[b.x,b.y,b.width,b.height].every(Number.isFinite)).map(b=>({x:Math.max(0,Math.min(100,Math.round(b.x))),y:Math.max(0,Math.min(100,Math.round(b.y))),width:Math.max(1,Math.min(100,Math.round(b.width))),height:Math.max(1,Math.min(100,Math.round(b.height)))})).slice(0,12):[]; return Response.json({status:'EDIT REQUIRED',reason:'Mandatory character rule: '+kinds.join(', ')+' detected. Remove all visible characters while preserving the game logo, background and other compliant artwork.',findings:[...findings,'Hard rule triggered: '+kinds.join(', ')].slice(0,12),characterBoxes,method:'OpenRouter vision detection + deterministic character-rule enforcement · human approval required'});
    }
    if(!['PASS','EDIT REQUIRED','NEEDS HUMAN REVIEW'].includes(out.status)) return Response.json({status:'NEEDS HUMAN REVIEW',reason:'No mandatory character was confidently detected, but the vision model returned an uncertain compliance result.',findings,method:'OpenRouter vision · safe fallback · human approval required'});
    return Response.json({status:out.status,reason:String(out.reason||''),findings,method:'OpenRouter free multimodal router · deterministic character rule checked · human approval required'});
