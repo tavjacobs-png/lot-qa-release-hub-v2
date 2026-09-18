@@ -1,0 +1,2 @@
+import {complete} from '../_store';
+export async function POST(r){const token=process.env.ARTWORK_WORKER_TOKEN;if(token&&r.headers.get('authorization')!=='Bearer '+token)return Response.json({error:'unauthorized'},{status:401});const b=await r.json();const j=complete(b.id,b.workerId||'artwork-worker',b.result||{});return j?Response.json(j):Response.json({error:'job not found or lease mismatch'},{status:409})}
