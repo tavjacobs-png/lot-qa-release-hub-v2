@@ -26,6 +26,8 @@ export async function GET(request){
  const u=new URL(request.url),name=(u.searchParams.get("name")||"").trim(),provider=(u.searchParams.get("provider")||"").trim();
  if(!name)return Response.json({candidates:[]},{status:400});
  const candidates=[],cfg=PROVIDERS[provider.toLowerCase()];
+ const aiKey=process.env.TAVILY_API_KEY;
+ if(aiKey){try{const r=await fetch("https://api.tavily.com/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({api_key:aiKey,query:name+" "+provider+" casino square game tile",search_depth:"advanced",include_images:true,max_results:8})});if(r.ok){const d=await r.json();for(const im of (d.images||[])){const url=typeof im==="string"?im:(im.url||im.image_url);const desc=typeof im==="string"?"":(im.description||"");if(url&&imageMatch(name,url,desc)===1&&!candidates.some(x=>x.url===url))candidates.push({url,source:"AI web search",confidence:99})}}}catch{}}
  async function inspect(url,source,base){
   try{const {html,url:finalUrl}=await get(url);if(!html)return;const title=pageTitle(html);const score=matchScore(name,finalUrl,title);if(score<0.75)return;for(const x of pageImages(html,name,source,base))if(!candidates.some(y=>y.url===x.url))candidates.push(x)}catch{}
  }
