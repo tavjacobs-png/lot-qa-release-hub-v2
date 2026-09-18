@@ -16,7 +16,7 @@ export async function GET(request) {
     });
     const html = await response.text();
 
-    const pattern = new RegExp('https?://[^"\\'<> ]+?\\.(?:jpg|jpeg|png|webp)', 'gi');
+    const pattern = /https?:\\/\\/[^\\s"'<>]+?\\.(?:jpg|jpeg|png|webp)/gi;
     const matches = html.match(pattern) || [];
     const unique = Array.from(new Set(matches))
       .filter((url) => !url.includes('gstatic.com') && !url.includes('google.com'))
