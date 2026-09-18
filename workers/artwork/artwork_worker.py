@@ -41,7 +41,9 @@ def detect(url):
         small=max(1,min(a["width"]*a["height"],b["width"]*b["height"]))
         return inter/small
     for b in boxes:
-        if b["confidence"]<.25: continue\n        # Suppress implausible low-confidence labels that commonly fire on stylised casino art.\n        if b["label"].lower() in {"horse","gorilla","monkey","bear","dog","cat","bird"} and b["confidence"]<.40: continue
+        if b["confidence"]<.25: continue
+        # Suppress implausible low-confidence labels that commonly fire on stylised casino art.
+        if b["label"].lower() in {"horse","gorilla","monkey","bear","dog","cat","bird"} and b["confidence"]<.40: continue
         if any(overlap(b,k)>.70 for k in kept): continue
         kept.append(b)
     return {"status":"EDIT REQUIRED" if kept else "NEEDS HUMAN REVIEW","characterBoxes":kept,"findings":[f"{b['label']} ({round(b['confidence']*100)}%)" for b in kept],"method":"Local Grounding DINO open-vocabulary detection · overlap filtered"}
