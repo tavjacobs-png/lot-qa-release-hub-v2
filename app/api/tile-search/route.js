@@ -16,7 +16,7 @@ function pageImages(html,name,source,base){
   const end=html.indexOf(">",pos);if(end<0)break;const tag=html.slice(pos,end+1);
   const src=(tag.match(/(?:src|data-src)=["']([^"']+)["']/i)||[])[1];
   const alt=(tag.match(/alt=["']([^"']*)["']/i)||[])[1]||"";
-  if(src){let url=clean(src);if(url.startsWith("//"))url="https:"+url;if(url.startsWith("http")){const score=imageMatch(name,url,alt);if(score>=0.67&&!out.some(x=>x.url===url))out.push({url,source,confidence:Math.min(99,Math.round(base*score))})}}
+  if(src){let url=clean(src);if(url.startsWith("//"))url="https:"+url;if(url.startsWith("http")){const score=imageMatch(name,url,alt);const exact=score===1;if(exact&&!out.some(x=>x.url===url))out.push({url,source,confidence:Math.min(99,Math.round(base*score))})}}
   pos=end+1;
  }
  return out
