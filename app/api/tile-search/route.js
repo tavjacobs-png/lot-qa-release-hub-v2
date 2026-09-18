@@ -41,9 +41,10 @@ export async function GET(request){
  const diagnostics={aiConfigured:false,aiStatus:"not-run",imagesReturned:0,exactMatches:0,squareVerified:0,searchPasses:0};
  const aiKey=process.env.TAVILY_API_KEY;diagnostics.aiConfigured=!!aiKey;
  async function verify(list){
-  for(const c of list){
-   if(checked.has(c.url))continue;checked.add(c.url);
-   const d=await imageSize(c.url);
+  const fresh=list.filter(c=>!checked.has(c.url));
+  fresh.forEach(c=>checked.add(c.url));
+  const results=await Promise.all(fresh.map(async c=>({c,d:await imageSize(c.url)})));
+  for(const {c,d} of results){
    if(d&&d.w===d.h){verified.push({...c,width:d.w,height:d.h,aspect:"1:1"});if(c.source.startsWith("AI"))diagnostics.squareVerified++}
   }
  }
@@ -67,12 +68,12 @@ export async function GET(request){
  async function inspect(url,source,base){
   try{const {html,url:finalUrl}=await get(url);if(!html)return;const title=pageTitle(html);if(matchScore(name,finalUrl,title)<0.75)return;const fresh=[];for(const x of pageImages(html,name,source,base))if(!candidates.some(y=>y.url===x.url)){candidates.push(x);fresh.push(x)}await verify(fresh)}catch{}
  }
- if(!verified.length&&cfg?.direct)await inspect(cfg.direct(name),"Official provider",99);
- if(!verified.length){
+ if(!aiKey&&!verified.length&&cfg?.direct)await inspect(cfg.direct(name),"Official provider",99);
+ if(!aiKey&&!verified.length){
   const q=(cfg?.domain?"site:"+cfg.domain+" ":"")+'"'+name+'" "'+provider+'"';
   try{const {html}=await get("https://html.duckduckgo.com/html/?q="+encodeURIComponent(q));for(const link of ddgLinks(html).slice(0,8)){if(cfg?.domain&&!link.includes(cfg.domain))continue;await inspect(link,cfg?.domain?"Official provider":"Web result",cfg?.domain?97:84);if(verified.length>=4)break}}catch{}
  }
- if(!verified.length){
+ if(!aiKey&&!verified.length){
   try{const {html}=await get("https://html.duckduckgo.com/html/?q="+encodeURIComponent('"'+name+'" "'+provider+'" casino lobby tile'));for(const link of ddgLinks(html).slice(0,8)){await inspect(link,"Web lobby fallback",82);if(verified.length>=4)break}}catch{}
  }
  return Response.json({query:name+" - "+provider,candidates:verified.slice(0,8),diagnostics});
