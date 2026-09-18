@@ -1,6 +1,6 @@
 const CHECKLIST = `
 You are reviewing a UK online-casino game lobby tile for PRE-LOGIN display.
-Return ONLY valid JSON with keys: status, reason, findings.
+Return ONLY valid JSON with keys: status, reason, findings, humans, animals, fictionalCharacters. humans, animals, and fictionalCharacters must each be booleans describing whether any such visible character is present anywhere in the tile.
 status must be exactly PASS, EDIT REQUIRED, or NEEDS HUMAN REVIEW.
 PASS only when the artwork clearly matches the named game and is suitable for pre-login.
 EDIT REQUIRED when a specific removable visual element makes it unsuitable.
@@ -30,8 +30,18 @@ export async function POST(request){
    if(!r.ok) return Response.json({error:(data?.error?.message||('OpenRouter HTTP '+r.status))+(data?.error?.metadata?.provider_name?' · provider: '+data.error.metadata.provider_name:'')},{status:502});
    const raw=data?.choices?.[0]?.message?.content||'';
    let out; try{out=JSON.parse(raw)}catch{const m=raw.match(/\{[\s\S]*\}/);out=m?JSON.parse(m[0]):null}
-   if(!out||!['PASS','EDIT REQUIRED','NEEDS HUMAN REVIEW'].includes(out.status)) return Response.json({error:'Vision model returned an invalid compliance result'},{status:502});
-   return Response.json({status:out.status,reason:String(out.reason||''),findings:Array.isArray(out.findings)?out.findings.map(String).slice(0,12):[],method:'OpenRouter free multimodal router · human approval required'});
+   if(!out) return Response.json({error:'Vision model returned an invalid compliance result'},{status:502});
+   const findings=Array.isArray(out.findings)?out.findings.map(String).slice(0,12):[];
+   const combined=(String(out.reason||'')+' '+findings.join(' ')).toLowerCase();
+   const detectedHuman=out.humans===true||/human|person|people|man\b|woman\b|boy\b|girl\b|fisherman|character/.test(combined);
+   const detectedAnimal=out.animals===true||/animal|fish\b|bass\b|dog\b|cat\b|bird\b|horse\b|monkey|gorilla|bear\b|wolf\b|lion\b|tiger\b|shark\b/.test(combined);
+   const detectedFictional=out.fictionalCharacters===true||/fictional|made-up|made up|mascot|creature|monster|fantasy being|anthropomorphic/.test(combined);
+   if(detectedHuman||detectedAnimal||detectedFictional){
+    const kinds=[detectedHuman?'human/person':null,detectedAnimal?'animal':null,detectedFictional?'fictional/made-up character':null].filter(Boolean);
+    return Response.json({status:'EDIT REQUIRED',reason:'Mandatory character rule: '+kinds.join(', ')+' detected. Remove all visible characters while preserving the game logo, background and other compliant artwork.',findings:[...findings,'Hard rule triggered: '+kinds.join(', ')].slice(0,12),method:'OpenRouter vision detection + deterministic character-rule enforcement · human approval required'});
+   }
+   if(!['PASS','EDIT REQUIRED','NEEDS HUMAN REVIEW'].includes(out.status)) return Response.json({status:'NEEDS HUMAN REVIEW',reason:'No mandatory character was confidently detected, but the vision model returned an uncertain compliance result.',findings,method:'OpenRouter vision · safe fallback · human approval required'});
+   return Response.json({status:out.status,reason:String(out.reason||''),findings,method:'OpenRouter free multimodal router · deterministic character rule checked · human approval required'});
   }finally{clearTimeout(timer)}
  }catch(e){return Response.json({error:e?.name==='AbortError'?'Vision scan timed out':('Vision scan unavailable: '+(e?.message||'unknown error'))},{status:502})}
 }
