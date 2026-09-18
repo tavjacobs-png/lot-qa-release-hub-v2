@@ -64,7 +64,7 @@ export async function POST(request){
     const kinds=[out.humans===true?'human/person':null,out.animals===true?'animal':null,out.fictionalCharacters===true?'fictional/made-up character':null].filter(Boolean);
     return Response.json({status:'EDIT REQUIRED',reason:'Mandatory character rule: '+kinds.join(', ')+' detected. Remove all visible characters while preserving the game logo, background and other compliant artwork.',findings,characterBoxes,method:'Cloudflare DETR + Cloudflare vision → deterministic character rule · human approval required'});
    }
-   if(out.humans===false&&out.animals===false&&out.fictionalCharacters===false)return Response.json({status:'PASS',reason:'Two-stage Cloudflare detection found no human, animal or fictional/made-up characters. Other pre-login checks require human approval.',findings,method:'Cloudflare DETR + Cloudflare vision → deterministic hard rule · human approval required'});
+   if(out.humans===false&&out.animals===false&&out.fictionalCharacters===false)return Response.json({status:'NEEDS HUMAN REVIEW',reason:'Automated detectors found no character, but a negative result is not trusted enough to PASS artwork under the zero-character rule.',findings,method:'Cloudflare DETR + Cloudflare vision · conservative no-false-PASS guard · human approval required'});
    return Response.json({status:'NEEDS HUMAN REVIEW',reason:'Character detection was inconclusive.',findings,method:'Cloudflare two-stage detection · safe fallback · human approval required'});
   }finally{clearTimeout(timer)}
  }catch(e){return Response.json({error:e?.name==='AbortError'?'Vision scan timed out':('Vision scan unavailable: '+(e?.message||'unknown error'))},{status:502})}
